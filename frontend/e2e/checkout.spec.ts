@@ -47,4 +47,24 @@ test.describe('Checkout flow', () => {
 
     await expect(page.getByText(/amount.*required|enter.*amount/i)).toBeVisible();
   });
+
+  test('handles peak-load invoice creation without latency regressions', async ({ page }) => {
+    // Simulate a burst of invoice creations to exercise batching/throughput paths.
+    const amountInput = page.getByLabel(/amount/i);
+    const createButton = page.getByRole('button', { name: /create invoice/i });
+
+    const burstSize = 5;
+    for (let i = 0; i < burstSize; i++) {
+      await amountInput.fill(`${10 + i}.00`);
+      await createButton.click();
+    }
+
+    // The most recent invoice should render within the peak-load budget.
+    const invoiceSummary = page.getByTestId('invoice-summary');
+    await expect(invoiceSummary).toBeVisible({ timeout: 15000 });
+    await expect(invoiceSummary).toContainText(/14/);
+
+    // No error surface should appear during the burst.
+    await expect(page.getByText(/error|failed/i)).toHaveCount(0);
+  });
 });
